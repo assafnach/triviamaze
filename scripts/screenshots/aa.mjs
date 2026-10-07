@@ -1,0 +1,25 @@
+import { chromium } from 'playwright';
+const tag = process.env.TAG ?? 'before';
+const browser = await chromium.launch({ args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
+const wait = (ms) => page.waitForTimeout(ms);
+await page.goto('http://localhost:5199/?theme=castle&seed=4242');
+await page.evaluate(() => { localStorage.clear(); localStorage.setItem('tm.settings.v1', JSON.stringify({ tutorialSeen: true })); });
+await page.reload();
+await wait(2500);
+await page.getByRole('button', { name: 'התחל משחק' }).click();
+await page.locator('.age-card').nth(2).click();
+await page.getByRole('button', { name: /היכנס למבוך/ }).click();
+const t0 = Date.now();
+while ((await page.evaluate(() => window.__tm?.state().phase)) !== 'INTRO_CINEMATIC') await wait(50);
+const loadMs = Date.now() - t0;
+while ((await page.evaluate(() => window.__tm?.state().phase)) !== 'PLAYING') await wait(250);
+await wait(9000);
+const info = await page.evaluate(() => {
+  const e = window.__tm.controller.engine;
+  const c = e.renderer.domElement;
+  return { quality: e.quality, fps: e.fps, scale: e.resolutionScale, dpr: devicePixelRatio, canvas: `${c.width}x${c.height}`, css: `${c.clientWidth}x${c.clientHeight}`, aa: e.renderer.getContext().getContextAttributes().antialias };
+});
+console.log(tag, 'load ms', loadMs, JSON.stringify(info));
+await page.screenshot({ path: `scripts/screenshots/out/aa-${tag}.png` });
+await browser.close();
